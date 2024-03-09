@@ -1,12 +1,11 @@
 package me.thiagorigonatti.rinhadebackendjavacore;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.sql.*;
 
 public class ClientCRUD {
-    private static final Logger LOG = LoggerFactory.getLogger(TransactionCRUD.class);
 
     private ClientCRUD() {
         throw new AssertionError();
@@ -29,23 +28,26 @@ public class ClientCRUD {
     }
 
 
-    public static Client insert(Client client) {
+    public static JsonNode insert(JsonNode clientNode) {
 
         String sql = "INSERT INTO tb_client (limite, saldo) VALUES (?, ?);";
 
-        LOG.info(sql);
 
-        try (Connection connection = ConnectionFactory.getConn(); PreparedStatement preparedStatement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (Connection connection = ConnectionFactory.getConn();
+             PreparedStatement preparedStatement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-            preparedStatement.setLong(1, client.getLimite());
-            preparedStatement.setLong(2, client.getSaldo());
+            preparedStatement.setLong(1, clientNode.get("limite").asLong());
+            preparedStatement.setLong(2, clientNode.get("saldo").asLong());
 
             preparedStatement.executeUpdate();
             ResultSet generatedKey = preparedStatement.getGeneratedKeys();
 
             if (generatedKey.next()) {
-                client.setId(generatedKey.getLong("id"));
-                return client;
+                ObjectNode objectNode = JSONUtils.OBJECT_MAPPER.createObjectNode();
+                objectNode.put("id", generatedKey.getLong("id"));
+                objectNode.put("limite", generatedKey.getLong("limite"));
+                objectNode.put("saldo", generatedKey.getLong("saldo"));
+                return objectNode;
             } else {
                 return null;
             }
@@ -57,11 +59,10 @@ public class ClientCRUD {
     }
 
 
-    public static Client findById(long clientId) {
+    public static JsonNode findById(long clientId) {
 
         String sql = "SELECT * FROM tb_client WHERE id = ? FOR UPDATE;";
 
-        LOG.info(sql);
 
         try (Connection connection = ConnectionFactory.getConn(); PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
 
@@ -69,11 +70,12 @@ public class ClientCRUD {
             ResultSet resultSet = preparedStatement.executeQuery();
 
             if (resultSet.next()) {
-                Client client = new Client();
-                client.setId(clientId);
-                client.setLimite(resultSet.getLong("limite"));
-                client.setSaldo(resultSet.getLong("saldo"));
-                return client;
+
+                ObjectNode objectNode = JSONUtils.OBJECT_MAPPER.createObjectNode();
+                objectNode.put("id", resultSet.getLong("id"));
+                objectNode.put("limite", resultSet.getLong("limite"));
+                objectNode.put("saldo", resultSet.getLong("saldo"));
+                return objectNode;
             }
 
         } catch (SQLException sqlException) {

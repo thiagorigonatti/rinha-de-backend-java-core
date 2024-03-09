@@ -1,14 +1,14 @@
 package me.thiagorigonatti.rinhadebackendjavacore;
 
-import org.json.JSONObject;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.*;
 import java.time.Instant;
-import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 public class TransactionCRUD {
 
@@ -41,16 +41,13 @@ public class TransactionCRUD {
     }
 
 
-    public synchronized static JSONObject altInsert(Transaction transaction) {
+    public synchronized static JsonNode insert(JsonNode transactionNode, long clientId) {
 
         String sql1 = "SELECT * FROM tb_client WHERE id = ? FOR UPDATE;";
-        LOG.info(sql1);
 
         String sql2 = "INSERT INTO tb_transaction (valor, tipo, descricao, client_id, realizada_em) VALUES (?, ?, ?, ?, now());";
-        LOG.info(sql2);
 
         String sql3 = "UPDATE tb_client SET saldo = ? WHERE id = ?;";
-        LOG.info(sql3);
 
         try (Connection connection = ConnectionFactory.getConn()) {
 
@@ -60,40 +57,42 @@ public class TransactionCRUD {
                  PreparedStatement insertTransactiontStmt = connection.prepareStatement(sql2);
                  PreparedStatement updateClientStmt = connection.prepareStatement(sql3, Statement.RETURN_GENERATED_KEYS)) {
 
-                selectClientStmt.setLong(1, transaction.getClientId());
-                insertTransactiontStmt.setLong(1, transaction.getValor());
-                insertTransactiontStmt.setString(2, String.valueOf(transaction.getTipo()));
-                insertTransactiontStmt.setString(3, transaction.getDescricao());
-                insertTransactiontStmt.setLong(4, transaction.getClientId());
+                selectClientStmt.setLong(1, clientId);
+                insertTransactiontStmt.setLong(1, transactionNode.get("valor").asLong());
+                insertTransactiontStmt.setString(2, transactionNode.get("tipo").asText());
+                insertTransactiontStmt.setString(3, transactionNode.get("descricao").asText());
+                insertTransactiontStmt.setLong(4, clientId);
 
                 ResultSet resultSet = selectClientStmt.executeQuery();
 
                 if (resultSet.next()) {
-                    final long limite = resultSet.getInt("limite");
-                    final long saldo = resultSet.getInt("saldo");
+                    final long limite = resultSet.getLong("limite");
+                    final long saldo = resultSet.getLong("saldo");
                     final long novoSaldo;
 
-                    if (transaction.getTipo().equals('d')) {
+                    if (transactionNode.get("tipo").asText().equals("d")) {
                         final long credit = limite - saldo * -1;
-                        if (credit < transaction.getValor()) {
+                        if (credit < transactionNode.get("valor").asLong()) {
                             connection.rollback();
                             return null;
-                        } else novoSaldo = saldo - transaction.getValor();
+                        } else novoSaldo = saldo - transactionNode.get("valor").asLong();
 
-                    } else novoSaldo = saldo + transaction.getValor();
+                    } else novoSaldo = saldo + transactionNode.get("valor").asLong();
 
                     updateClientStmt.setLong(1, novoSaldo);
-                    updateClientStmt.setLong(2, transaction.getClientId());
+                    updateClientStmt.setLong(2, clientId);
                     updateClientStmt.executeUpdate();
                     insertTransactiontStmt.executeUpdate();
 
                     ResultSet generatedKeys = updateClientStmt.getGeneratedKeys();
+
                     if (generatedKeys.next()) {
-                        JSONObject jsonObject = new JSONObject();
-                        jsonObject.accumulate("limite", generatedKeys.getInt(2));
-                        jsonObject.accumulate("saldo", generatedKeys.getInt(3));
+                        ObjectNode objectNode = JSONUtils.OBJECT_MAPPER.createObjectNode();
+                        objectNode.put("limite", generatedKeys.getLong(2));
+                        objectNode.put("saldo", generatedKeys.getLong(3));
                         connection.commit();
-                        return jsonObject;
+                        return objectNode;
+
                     } else {
                         connection.rollback();
                         return null;
@@ -111,20 +110,14 @@ public class TransactionCRUD {
         } catch (SQLException sqlException) {
             sqlException.printStackTrace();
         }
-
         return null;
     }
 
-    public static JSONObject findTenById(long clientId) {
+    public static JsonNode findTenById(long clientId) {
 
         String sql1 = "SELECT * FROM tb_client WHERE id = ? FOR UPDATE;";
 
-
         String sql2 = "SELECT * FROM tb_transaction WHERE client_id = ? ORDER BY realizada_em DESC LIMIT 10 FOR UPDATE;";
-
-        LOG.info(sql1);
-
-        LOG.info(sql2);
 
         try (Connection connection = ConnectionFactory.getConn()) {
 
@@ -133,33 +126,36 @@ public class TransactionCRUD {
             try (PreparedStatement selectClientStmt = connection.prepareStatement(sql1);
                  PreparedStatement selectTransactionsStmt = connection.prepareStatement(sql2)) {
 
-
                 selectClientStmt.setLong(1, clientId);
                 selectTransactionsStmt.setLong(1, clientId);
-                ResultSet ClientResultSet = selectClientStmt.executeQuery();
+                ResultSet clientResultSet = selectClientStmt.executeQuery();
                 ResultSet transactionsResultSet = selectTransactionsStmt.executeQuery();
-                List<Transaction> transactionList = new ArrayList<>();
+                ArrayNode arrayNode = JSONUtils.OBJECT_MAPPER.createArrayNode();
 
                 while (transactionsResultSet.next()) {
-                    Transaction transaction = new Transaction();
-                    transaction.setId(transactionsResultSet.getLong("id"));
-                    transaction.setValor(transactionsResultSet.getLong("valor"));
-                    transaction.setTipo(transactionsResultSet.getString("tipo").toCharArray()[0]);
-                    transaction.setDescricao(transactionsResultSet.getString("descricao"));
-                    transaction.setClientId(clientId);
-                    transactionList.add(transaction);
+                    ObjectNode objectNode = JSONUtils.OBJECT_MAPPER.createObjectNode();
+                    objectNode.put("id", transactionsResultSet.getLong("id"));
+                    objectNode.put("valor", transactionsResultSet.getLong("valor"));
+                    objectNode.put("tipo", transactionsResultSet.getString("tipo"));
+                    objectNode.put("descricao", transactionsResultSet.getString("descricao"));
+                    objectNode.put("client_id", transactionsResultSet.getLong("client_id"));
+                    arrayNode.add(objectNode);
                 }
 
-                if (ClientResultSet.next()) {
-                    JSONObject saldo = new JSONObject();
-                    saldo.accumulate("total", ClientResultSet.getInt("saldo"));
-                    saldo.accumulate("limite", ClientResultSet.getInt("limite"));
-                    saldo.accumulate("data_extrato", Instant.now());
-                    JSONObject saldoObj = new JSONObject();
-                    saldoObj.accumulate("saldo", saldo);
-                    saldoObj.accumulate("ultimas_transacoes", transactionList);
+                if (clientResultSet.next()) {
+
+                    ObjectNode saldo = JSONUtils.OBJECT_MAPPER.createObjectNode()
+                            .put("total", clientResultSet.getLong("saldo"))
+                            .put("limite", clientResultSet.getLong("limite"))
+                            .put("data_extrato", Instant.now().toString());
+
+                    ObjectNode extrato = JSONUtils.OBJECT_MAPPER.createObjectNode();
+
+                    extrato.set("saldo", saldo);
+                    extrato.set("ultimas_transacoes", arrayNode);
+
                     connection.commit();
-                    return saldoObj;
+                    return extrato;
                 }
 
             } catch (SQLException sqlException) {

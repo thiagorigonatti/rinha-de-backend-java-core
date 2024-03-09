@@ -1,22 +1,17 @@
 package me.thiagorigonatti.rinhadebackendjavacore;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
-import org.json.JSONObject;
 
 import java.io.IOException;
 import java.io.InputStream;
 
 public class Handler implements HttpHandler {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
-
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-
+        exchange.getResponseHeaders().add("Content-Type", "application/json");
         String uri = exchange.getRequestURI().getPath();
         String context = exchange.getHttpContext().getPath();
         String method = exchange.getRequestMethod();
@@ -24,7 +19,9 @@ public class Handler implements HttpHandler {
         if (method.equals("POST")) {
 
             if (uri.matches(context + "/?$")) clientesPost().handle(exchange);
+
             else if (uri.matches(context + "/\\d{1,15}/transacoes/?$")) transactionPost().handle(exchange);
+
             else RinhaServer.reply(exchange, 400, "BAD REQUEST");
 
         } else if (method.equals("GET")) {
@@ -34,7 +31,6 @@ public class Handler implements HttpHandler {
 
             else if (uri.matches(context + "/\\d{1,15}/extrato/?$"))
                 extratoGet().handle(exchange);
-
             else RinhaServer.reply(exchange, 404, "NOT FOUND");
 
         } else RinhaServer.reply(exchange, 405, "METHOD NOT ALLOWED");
@@ -42,9 +38,7 @@ public class Handler implements HttpHandler {
 
 
     public long pathId(HttpExchange exchange, String path) throws IOException {
-
         String[] pathParts = path.split("/");
-
         if (pathParts.length >= 4) return Long.parseLong(pathParts[2]);
         else {
             RinhaServer.reply(exchange, 404, "NOT FOUND");
@@ -58,14 +52,14 @@ public class Handler implements HttpHandler {
 
             long clientId = pathId(exchange, exchange.getRequestURI().getPath());
 
-            JSONObject byId = TransactionCRUD.findTenById(clientId);
+            JsonNode jsonNode = TransactionCRUD.findTenById(clientId);
 
-            if (byId == null) {
+            if (jsonNode == null) {
                 RinhaServer.reply(exchange, 404, "NOT FOUND");
                 return;
             }
 
-            RinhaServer.replyWithBodyAndCode(exchange, byId.toString(), 200);
+            RinhaServer.replyWithBodyAndCode(exchange, jsonNode.toString(), 200);
         };
     }
 
@@ -79,13 +73,12 @@ public class Handler implements HttpHandler {
             InputStream inputStream = exchange.getRequestBody();
             final byte[] requestBody = inputStream.readAllBytes();
 
-            if (!JSONUtils.isValid(requestBody)) {
+            if (JSONUtils.isNotValid(requestBody)) {
                 RinhaServer.reply(exchange, 400, "BAD REQUEST");
                 return;
             }
 
-            JsonNode jsonNode = objectMapper.readTree(requestBody);
-
+            JsonNode jsonNode = JSONUtils.OBJECT_MAPPER.readTree(requestBody);
 
             if (!jsonNode.has("valor") ||
                     !jsonNode.has("tipo") ||
@@ -100,7 +93,7 @@ public class Handler implements HttpHandler {
 
             if (!jValor.asText().matches("^\\d{1,15}$") ||
                     jValor.isNull() ||
-                    !(jValor.asInt() > 0) ||
+                    !(jValor.asLong() > 0) ||
                     !jTipo.asText().matches("[dc]") ||
                     jTipo.isNull() ||
                     !jDescricao.asText().matches("^\\w{1,10}$") ||
@@ -110,20 +103,15 @@ public class Handler implements HttpHandler {
                 return;
             }
 
-            Transaction transaction = objectMapper.treeToValue(jsonNode, Transaction.class);
-            transaction.setClientId(clientId);
 
-            JSONObject jsonObject = TransactionCRUD.altInsert(transaction);
+            JsonNode savedTransaction = TransactionCRUD.insert(jsonNode, clientId);
 
-            if (jsonObject == null) {
+            if (savedTransaction == null) {
                 RinhaServer.reply(exchange, 422, "UNPROCESSABLE ENTITY");
                 return;
             }
-
-            RinhaServer.replyWithBodyAndCode(exchange, jsonObject.toString(), 200);
-        }
-
-                ;
+            RinhaServer.replyWithBodyAndCode(exchange, savedTransaction.toString(), 200);
+        };
 
     }
 
@@ -134,54 +122,50 @@ public class Handler implements HttpHandler {
             InputStream inputStream = exchange.getRequestBody();
             final byte[] request = inputStream.readAllBytes();
 
-            if (!JSONUtils.isValid(request))
+            if (JSONUtils.isNotValid(request))
                 RinhaServer.reply(exchange, 400, "BAD REQUEST");
 
-            JsonNode jsonNode = objectMapper.readTree(request);
+            JsonNode clientNodeRequest = JSONUtils.OBJECT_MAPPER.readTree(request);
 
-            JsonNode jLimite = jsonNode.get("limite");
-            JsonNode jSaldo = jsonNode.get("saldo");
+            JsonNode jLimite = clientNodeRequest.get("limite");
+            JsonNode jSaldo = clientNodeRequest.get("saldo");
 
             if (!jLimite.asText().matches("^\\d{1,15}$") ||
                     !jSaldo.asText().matches("^\\d{1,15}$") ||
-                    jLimite.asInt() < 0 ||
-                    jSaldo.asInt() < 0
+                    jLimite.asLong() < 0 ||
+                    jSaldo.asLong() < 0
             ) {
                 RinhaServer.reply(exchange, 422, "UNPROCESSABLE ENTITY");
                 return;
             }
 
-            Client client = objectMapper.treeToValue(jsonNode, Client.class);
+            JsonNode savedClient = ClientCRUD.insert(clientNodeRequest);
 
-            Client savedClient = ClientCRUD.insert(client);
+            if (savedClient == null) {
+                RinhaServer.reply(exchange, 400, "BAD REQUEST");
+                return;
+            }
 
-            byte[] bytes = objectMapper.writeValueAsBytes(savedClient);
-
-            RinhaServer.replyWithBodyAndCode(exchange, bytes, 200);
+            RinhaServer.replyWithBodyAndCode(exchange, savedClient.toString(), 200);
         };
-
     }
 
+
     public HttpHandler clientesGet() {
-
         return exchange -> {
-
             String[] pathParts = exchange.getRequestURI().getPath().split("/");
             long id;
-
             if (pathParts.length >= 3) {
                 id = Long.parseLong(pathParts[2]);
 
-                Client returnedClient = ClientCRUD.findById(id);
+                JsonNode jsonNode = ClientCRUD.findById(id);
 
-                if (returnedClient == null) {
+                if (jsonNode == null) {
                     RinhaServer.reply(exchange, 404, "NOT FOUND");
                     return;
                 }
 
-                byte[] bytes = objectMapper.writeValueAsBytes(returnedClient);
-
-                RinhaServer.replyWithBodyAndCode(exchange, bytes, 200);
+                RinhaServer.replyWithBodyAndCode(exchange, jsonNode.toString(), 200);
 
             } else RinhaServer.reply(exchange, 404, "NOT FOUND");
         };

@@ -6,18 +6,18 @@ import java.io.IOException;
 
 public class JSONUtils {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
 
-    public static boolean isValid(final byte[] bytes) {
+    public static boolean isNotValid(final byte[] bytes) {
 
-        if (bytes.length == 0) return false;
+        if (bytes.length == 0) return true;
 
         try {
             OBJECT_MAPPER.readTree(bytes);
-            return true;
-        } catch (IOException e) {
             return false;
+        } catch (IOException e) {
+            return true;
         }
     }
 }
