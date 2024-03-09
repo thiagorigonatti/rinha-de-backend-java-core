@@ -11,7 +11,9 @@ public class Handler implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
+
         exchange.getResponseHeaders().add("Content-Type", "application/json");
+
         String uri = exchange.getRequestURI().getPath();
         String context = exchange.getHttpContext().getPath();
         String method = exchange.getRequestMethod();
@@ -31,6 +33,7 @@ public class Handler implements HttpHandler {
 
             else if (uri.matches(context + "/\\d{1,15}/extrato/?$"))
                 extratoGet().handle(exchange);
+
             else RinhaServer.reply(exchange, 404, "NOT FOUND");
 
         } else RinhaServer.reply(exchange, 405, "METHOD NOT ALLOWED");
@@ -69,6 +72,14 @@ public class Handler implements HttpHandler {
         return exchange -> {
 
             long clientId = pathId(exchange, exchange.getRequestURI().getPath());
+
+            JsonNode checkExistingClient = ClientCRUD.findById(clientId);
+
+            if (checkExistingClient == null) {
+                RinhaServer.reply(exchange, 404, "NOT FOUND");
+                return;
+            }
+
 
             InputStream inputStream = exchange.getRequestBody();
             final byte[] requestBody = inputStream.readAllBytes();

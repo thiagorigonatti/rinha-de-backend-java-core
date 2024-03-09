@@ -9,20 +9,17 @@ import java.net.InetAddress;
 public class Rinha {
 
 
-    private static final Logger LOG = LoggerFactory.getLogger(Rinha.class);
+    public static final Logger LOG = LoggerFactory.getLogger(Rinha.class);
 
     public static void main(String[] args) throws IOException {
 
-        try (InputStream is = Rinha.class.getClassLoader().getResourceAsStream("logo");
+        try (InputStream is = Rinha.class.getClassLoader().getResourceAsStream("logo2");
              InputStream is2 = Rinha.class.getClassLoader().getResourceAsStream("version")) {
             if (InetAddress.getLocalHost().getHostName().equals("api01")) {
-                LOG.info(new String(is.readAllBytes()).replace("%ver%", new String(is2.readAllBytes())));
+                LOG.info(new String(is.readAllBytes()));
                 LOG.info("");
             }
         }
-
         new RinhaServer().start();
-
-
     }
 }

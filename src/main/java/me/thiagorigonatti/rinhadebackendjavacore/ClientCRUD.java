@@ -64,7 +64,8 @@ public class ClientCRUD {
         String sql = "SELECT * FROM tb_client WHERE id = ? FOR UPDATE;";
 
 
-        try (Connection connection = ConnectionFactory.getConn(); PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+        try (Connection connection = ConnectionFactory.getConn();
+             PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
 
             preparedStatement.setLong(1, clientId);
             ResultSet resultSet = preparedStatement.executeQuery();

@@ -6,6 +6,10 @@ import java.io.IOException;
 
 public class JSONUtils {
 
+    private JSONUtils() {
+        throw new AssertionError();
+    }
+
     public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
 

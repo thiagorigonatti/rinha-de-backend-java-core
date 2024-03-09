@@ -9,10 +9,9 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.*;
 import java.time.Instant;
+import java.time.ZoneId;
 
 public class TransactionCRUD {
-
-    private static final Logger LOG = LoggerFactory.getLogger(TransactionCRUD.class);
 
     private TransactionCRUD() {
         throw new AssertionError();
@@ -58,6 +57,7 @@ public class TransactionCRUD {
                  PreparedStatement updateClientStmt = connection.prepareStatement(sql3, Statement.RETURN_GENERATED_KEYS)) {
 
                 selectClientStmt.setLong(1, clientId);
+
                 insertTransactiontStmt.setLong(1, transactionNode.get("valor").asLong());
                 insertTransactiontStmt.setString(2, transactionNode.get("tipo").asText());
                 insertTransactiontStmt.setString(3, transactionNode.get("descricao").asText());
@@ -134,11 +134,13 @@ public class TransactionCRUD {
 
                 while (transactionsResultSet.next()) {
                     ObjectNode objectNode = JSONUtils.OBJECT_MAPPER.createObjectNode();
-                    objectNode.put("id", transactionsResultSet.getLong("id"));
                     objectNode.put("valor", transactionsResultSet.getLong("valor"));
                     objectNode.put("tipo", transactionsResultSet.getString("tipo"));
                     objectNode.put("descricao", transactionsResultSet.getString("descricao"));
-                    objectNode.put("client_id", transactionsResultSet.getLong("client_id"));
+                    objectNode.put("realizada_em", transactionsResultSet
+                            .getTimestamp("realizada_em").toInstant()
+                            .atZone(ZoneId.of("America/Sao_Paulo")).toString());
+
                     arrayNode.add(objectNode);
                 }
 
@@ -146,8 +148,9 @@ public class TransactionCRUD {
 
                     ObjectNode saldo = JSONUtils.OBJECT_MAPPER.createObjectNode()
                             .put("total", clientResultSet.getLong("saldo"))
-                            .put("limite", clientResultSet.getLong("limite"))
-                            .put("data_extrato", Instant.now().toString());
+                            .put("data_extrato", Instant.now().atZone(ZoneId.of("America/Sao_Paulo")).toString())
+                            .put("limite", clientResultSet.getLong("limite"));
+
 
                     ObjectNode extrato = JSONUtils.OBJECT_MAPPER.createObjectNode();
 

@@ -27,6 +27,11 @@ public class RinhaServer {
 
 
     public static void replyWithBodyAndCode(HttpExchange exchange, final byte[] body, int code) throws IOException {
+
+        String ip = exchange.getRemoteAddress().toString();
+        String method = exchange.getRequestMethod();
+        String uri = exchange.getRequestURI().getPath();
+        Rinha.LOG.info(String.format("[%s %s %s %d %s]", ip, method, uri, code, new String(body)));
         exchange.sendResponseHeaders(code, body.length);
         OutputStream outputStream = exchange.getResponseBody();
         outputStream.write(body);
@@ -41,6 +46,13 @@ public class RinhaServer {
     }
 
     public static void reply(HttpExchange exchange, int code, String message) throws IOException {
+
+        String ip = exchange.getRemoteAddress().toString();
+        String method = exchange.getRequestMethod();
+        String uri = exchange.getRequestURI().getPath();
+
+        Rinha.LOG.info(String.format("[%s %s %s %d %s]", ip, method, uri, code, message));
+
         ObjectNode objectNode = JSONUtils.OBJECT_MAPPER.createObjectNode();
         objectNode.put("error_message", message);
         objectNode.put("status_code", code);

@@ -13,4 +13,4 @@ COPY gradlew .
 RUN ./gradlew update-version
 RUN ./gradlew shadowJar
 
-ENTRYPOINT exec java $JVM_OPTIONS -jar build/libs/rinha-de-backend-java-core-0.0.4-all.jar
+ENTRYPOINT exec java $JVM_OPTIONS -jar build/libs/rinha-de-backend-java-core-0.0.5-all.jar
